@@ -12,6 +12,7 @@ from diagrams.digitalocean.network import Firewall
 
 # Generic
 from diagrams.onprem.client import Users
+from diagrams.programming.language import Python
 from diagrams.generic.network import VPN
 
 # Edge styles
@@ -35,7 +36,6 @@ with Diagram(
 ):
     app = Users("Application service\nDigital Ocean Droplet")
 
-    # AWS
     with Cluster("AWS"):
         cloudfront = CloudFront("Amazon CloudFront")
         apigw = APIGateway("Amazon API Gateway\nHTTP API")
@@ -52,7 +52,6 @@ with Diagram(
         lambda_fn >> cw_logs
         secrets >> SECRETS_EDGE >> lambda_fn
 
-    # Digital Ocean
     with Cluster("Digital Ocean"):
         with Cluster("Digital Ocean VPC"):
             do_vpn = VPN("Digital Ocean VPN gateway")
@@ -72,26 +71,31 @@ with Diagram(
     outformat="png",
     show=False,
     direction="LR",
-    graph_attr={"nodesep": "1.9", "ranksep": "1.7", "pad": "0.4", "splines": "spline"},
+    graph_attr={"nodesep": "2.0", "ranksep": "1.7", "pad": "0.4", "splines": "spline"},
     node_attr={"fontsize": "11"},
     edge_attr={"fontsize": "10"},
 ):
-    user = Users("App on Digital Ocean Droplet")
+    app = Users("App on Digital Ocean Droplet")
     cf = CloudFront("Amazon CloudFront")
     api = APIGateway("Amazon API Gateway\nHTTP API")
-    fn = Lambda("AWS Lambda in VPC")
+
+    with Cluster("AWS Lambda function"):
+        fn = Lambda("Handler")
+        validator = Python("OpenAPI validator\nPydantic")
+
     logs = Cloudwatch("Amazon CloudWatch Logs")
     secrets = SecretsManager("AWS Secrets Manager")
     vpn = VPN("Site to site VPN")
     fw = Firewall("Digital Ocean Cloud Firewall")
     db = DbaasPrimary("Digital Ocean MySQL\nprivate endpoint")
 
-    # Numbered developer journey
-    user >> Edge(label="1 request") >> cf
+    app >> Edge(label="1 request") >> cf
     cf >> Edge(label="2 forward") >> api
     api >> Edge(label="3 invoke") >> fn
-    secrets >> Edge(label="4 get secrets") >> fn
+    validator >> Edge(label="4 ok") >> fn
+    secrets >> Edge(label="3a get secrets") >> fn
     fn >> Edge(label="8 write logs") >> logs
+    fn >> Edge(label="3b validate") >> validator
     fn >> Edge(label="5 read only") >> vpn
     vpn >> Edge(label="6 private route") >> fw
     fw >> Edge(label="7 query") >> db
